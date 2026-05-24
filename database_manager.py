@@ -14,6 +14,29 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from plugins.base.defect_base import DetectionResult
 
 
+def get_app_data_directory() -> str:
+    """
+    获取应用数据目录
+    
+    在打包成 exe 后，需要确保数据存储在持久化的位置，而不是临时目录。
+    返回的目录优先级：
+    1. 打包后：可执行文件所在目录的 data 文件夹
+    2. 开发模式：脚本所在目录的 data 文件夹
+    """
+    # 判断是否是打包后的环境
+    if getattr(sys, 'frozen', False):
+        # 打包后的情况：使用可执行文件所在目录
+        app_dir = os.path.dirname(sys.executable)
+    else:
+        # 开发模式：使用脚本所在目录
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # 创建并返回 data 目录
+    data_dir = os.path.join(app_dir, 'data')
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
+
+
 class DatabaseManager:
     """
     数据库管理器
@@ -27,13 +50,13 @@ class DatabaseManager:
             db_path: 数据库文件路径，默认为项目目录下的 data/detection_records.db
         """
         if db_path is None:
-            # 默认数据库路径在项目根目录的 data 文件夹
-            project_dir = os.path.dirname(os.path.abspath(__file__))
-            data_dir = os.path.join(project_dir, 'data')
-            os.makedirs(data_dir, exist_ok=True)
+            # 默认数据库路径在应用数据目录的 data 文件夹
+            data_dir = get_app_data_directory()
             db_path = os.path.join(data_dir, 'detection_records.db')
         
         self.db_path = db_path
+        # 确保数据库目录存在
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self._create_tables()
     
     def _get_connection(self):
@@ -217,9 +240,9 @@ class DatabaseManager:
             import cv2
             import uuid
             
-            # 创建保存目录
-            project_dir = os.path.dirname(os.path.abspath(__file__))
-            results_dir = os.path.join(project_dir, 'data', 'results_images')
+            # 创建保存目录（使用持久化的数据目录）
+            data_dir = get_app_data_directory()
+            results_dir = os.path.join(data_dir, 'results_images')
             os.makedirs(results_dir, exist_ok=True)
             
             # 生成文件名（使用UUID避免文件名+时间戳）

@@ -6,7 +6,8 @@
 """
 
 import os
-from typing import List
+from typing import Dict, Any, List
+import cv2
 from plugins.base.defect_base import DetectionAlgorithmBase, DetectionResult
 
 
@@ -29,7 +30,7 @@ class TemplateDetector(DetectionAlgorithmBase):
         self.detection_threshold = 0.5
         self.max_results = 100
     
-    def detect(self, image_path: str) -> List[DetectionResult]:
+    def detect(self, image_path: str) -> Dict[str, Any]:
         """
         检测图片中的缺陷
         
@@ -37,15 +38,41 @@ class TemplateDetector(DetectionAlgorithmBase):
             image_path: 待检测图片的路径
             
         Returns:
-            List[DetectionResult]: 检测结果列表
+            Dict: 检测结果字典，包含以下字段:
+                - image_path: 原始图片路径
+                - result_status: 检测状态 (OK/NG/ERROR)
+                - result_image: 检测结果图片数据
+                - result_path: 结果保存路径
+                - error_message: 错误信息（如有）
+                - detections: 检测到的缺陷列表
         """
-        results = []
-        
         # 验证图片
         if not self.validate_image(image_path):
-            return results
+            return {
+                'image_path': image_path,
+                'result_status': 'ERROR',
+                'result_image': None,
+                'result_path': None,
+                'error_message': 'Invalid image path',
+                'detections': []
+            }
+        
+        detections = []
+        result_image = None
         
         try:
+            # 读取原始图片用于绘制
+            result_image = cv2.imread(image_path)
+            if result_image is None:
+                return {
+                    'image_path': image_path,
+                    'result_status': 'ERROR',
+                    'result_image': None,
+                    'result_path': None,
+                    'error_message': 'Failed to read image',
+                    'detections': []
+                }
+            
             # ======================================
             # 在这里实现您的检测算法
             # ======================================
@@ -70,16 +97,41 @@ class TemplateDetector(DetectionAlgorithmBase):
             #     confidence=0.95,
             #     bbox=(100, 100, 300, 300)
             # )
-            # results.append(result)
+            # detections.append(result)
             
-            pass  # 删除此行，当实现真实算法时
+            # pass  # 删除此行，当实现真实算法时
+            
+            # 绘制检测框
+            for idx, det in enumerate(detections):
+                x1, y1, x2, y2 = det.bbox
+                cv2.rectangle(result_image, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                label = f"{det.class_name} {det.confidence:.0%}"
+                cv2.putText(result_image, label, (x1, y1 - 10),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+            
+            result_status = 'NG' if len(detections) > 0 else 'OK'
+            
+            return {
+                'image_path': image_path,
+                'result_status': result_status,
+                'result_image': result_image,
+                'result_path': None,
+                'error_message': '',
+                'detections': detections
+            }
             
         except Exception as e:
             print(f"Error during detection: {e}")
             import traceback
             traceback.print_exc()
-        
-        return results
+            return {
+                'image_path': image_path,
+                'result_status': 'ERROR',
+                'result_image': None,
+                'result_path': None,
+                'error_message': str(e),
+                'detections': []
+            }
     
     def preprocess(self, image_path: str):
         """

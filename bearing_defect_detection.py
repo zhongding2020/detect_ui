@@ -776,8 +776,12 @@ class MainWindow(QMainWindow):
                 # 调用插件的检测方法
                 print(f"   🔧 调用插件 {self.current_plugin.name} 的 detect() 方法...")
                 try:
-                    results = self.current_plugin.detect(image_path)
-                    print(f"   ✅ 插件调用成功，返回 {len(results)} 个检测结果")
+                    detect_result = self.current_plugin.detect(image_path)
+                    results = detect_result.get('detections', [])
+                    result_status = detect_result.get('result_status', 'OK')
+                    result_image = detect_result.get('result_image', None)
+                    error_message = detect_result.get('error_message', '')
+                    print(f"   ✅ 插件调用成功，返回 {len(results)} 个检测结果，状态: {result_status}")
                 except Exception as e:
                     print(f"   ❌ 插件调用失败: {str(e)}")
                     import traceback
@@ -785,7 +789,7 @@ class MainWindow(QMainWindow):
                     continue
                 
                 # 显示图片（带标注）并保存
-                result_image_path = self.display_image_with_results(image_path, results, save_result=True)
+                result_image_path = self.display_image_with_results(image_path, results, result_image, save_result=True)
                 
                 # 将结果显示到表格
                 if results:
@@ -799,6 +803,8 @@ class MainWindow(QMainWindow):
                               f"坐标: {coord_text}")
                     
                     print(f"   ✅ 检测完成")
+                elif error_message:
+                    print(f"   ❌ 检测错误: {error_message}")
                 else:
                     print(f"   ℹ️ 未检测到缺陷")
                 
@@ -812,13 +818,25 @@ class MainWindow(QMainWindow):
                 self.defect_count_label.setText(f"缺陷数量: {total_detections}")
                 
                 # 根据当前图片的检测结果更新OK/NG状态
-                if len(results) > 0:
+                if result_status == 'NG':
                     self.status_label.setText("NG")
                     self.status_label.setStyleSheet("""
                         QLabel {
                             color: #FF4444;
                             background-color: #2a1a1a;
                             border: 3px solid #FF4444;
+                            border-radius: 10px;
+                            padding: 15px 40px;
+                            min-width: 120px;
+                        }
+                    """)
+                elif result_status == 'ERROR':
+                    self.status_label.setText("ERROR")
+                    self.status_label.setStyleSheet("""
+                        QLabel {
+                            color: #FF8800;
+                            background-color: #2a2a1a;
+                            border: 3px solid #FF8800;
                             border-radius: 10px;
                             padding: 15px 40px;
                             min-width: 120px;
@@ -877,12 +895,13 @@ class MainWindow(QMainWindow):
             self.start_btn.setText("⚡ 立即开始")
             print(f"🔄 界面已恢复就绪状态")
     
-    def display_image_with_results(self, image_path, results, save_result=True):
+    def display_image_with_results(self, image_path, results, result_image=None, save_result=True):
         """在界面上显示带标注的图片
         
         Args:
             image_path: 原始图片路径
             results: 检测结果列表
+            result_image: 插件返回的已标注图片（可选）
             save_result: 是否保存标注后的图片
             
         Returns:
@@ -894,42 +913,46 @@ class MainWindow(QMainWindow):
             from PyQt5.QtGui import QImage, QPixmap
             from PyQt5.QtCore import Qt
             
-            # 读取图片
-            img = cv2.imread(image_path)
-            if img is None:
-                print(f"   ⚠️ 无法读取图片: {image_path}")
-                return None
-            
-            # 绘制检测框
-            for idx, result in enumerate(results):
-                x1, y1, x2, y2 = result.bbox
+            # 使用插件返回的图片，如果没有则自己读取并绘制
+            if result_image is not None:
+                img = result_image.copy()
+            else:
+                # 读取图片
+                img = cv2.imread(image_path)
+                if img is None:
+                    print(f"   ⚠️ 无法读取图片: {image_path}")
+                    return None
                 
-                # 根据类别设置颜色
-                colors = {
-                    'crack': (0, 0, 255),      # 红色
-                    'scratch': (0, 255, 255),   # 黄色
-                    'pitting': (255, 0, 0),     # 蓝色
-                    'default': (0, 255, 0)       # 绿色
-                }
-                color = colors.get(result.class_name.lower(), colors['default'])
-                
-                # 绘制矩形框
-                cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
-                
-                # 绘制标签背景
-                label = f"{result.class_name} {result.confidence:.0%}"
-                label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                cv2.rectangle(img, (x1, y1 - label_size[1] - 10), 
-                            (x1 + label_size[0], y1), color, -1)
-                
-                # 绘制标签文字
-                cv2.putText(img, label, (x1, y1 - 5),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-                
-                # 绘制序号
-                cv2.circle(img, (x1, y1), 10, color, -1)
-                cv2.putText(img, str(idx + 1), (x1 - 5, y1 + 5),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+                # 绘制检测框
+                for idx, result in enumerate(results):
+                    x1, y1, x2, y2 = result.bbox
+                    
+                    # 根据类别设置颜色
+                    colors = {
+                        'crack': (0, 0, 255),      # 红色
+                        'scratch': (0, 255, 255),   # 黄色
+                        'pitting': (255, 0, 0),     # 蓝色
+                        'default': (0, 255, 0)       # 绿色
+                    }
+                    color = colors.get(result.class_name.lower(), colors['default'])
+                    
+                    # 绘制矩形框
+                    cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+                    
+                    # 绘制标签背景
+                    label = f"{result.class_name} {result.confidence:.0%}"
+                    label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                    cv2.rectangle(img, (x1, y1 - label_size[1] - 10), 
+                                (x1 + label_size[0], y1), color, -1)
+                    
+                    # 绘制标签文字
+                    cv2.putText(img, label, (x1, y1 - 5),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    
+                    # 绘制序号
+                    cv2.circle(img, (x1, y1), 10, color, -1)
+                    cv2.putText(img, str(idx + 1), (x1 - 5, y1 + 5),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
             
             # 保存标注图片（如果需要）
             if save_result and hasattr(self, 'db_manager'):
@@ -1160,20 +1183,25 @@ class MainWindow(QMainWindow):
             
             # 调用插件检测
             try:
-                results = self.current_plugin.detect(image_path)
-                print(f"[Process] Detected {len(results)} defects in {filename}")
+                detect_result = self.current_plugin.detect(image_path)
+                results = detect_result.get('detections', [])
+                result_status = detect_result.get('result_status', 'OK')
+                result_image = detect_result.get('result_image', None)
+                print(f"[Process] Detected {len(results)} defects in {filename}, status: {result_status}")
             except Exception as e:
                 print(f"[Process] Plugin error: {e}")
                 results = []
+                result_status = 'ERROR'
+                result_image = None
             
             # 显示图片和结果
-            result_image_path = self.display_image_with_results(image_path, results, save_result=True)
+            result_image_path = self.display_image_with_results(image_path, results, result_image, save_result=True)
             
             # 添加到历史记录
             self.add_to_history(image_path, results, 0, result_image_path)
             
             # 更新状态
-            if results:
+            if result_status == 'NG':
                 self.status_label.setText("NG")
                 self.status_label.setStyleSheet("""
                     QLabel {
@@ -1187,6 +1215,18 @@ class MainWindow(QMainWindow):
                 """)
                 defect_count = int(self.defect_count_label.text().split(":")[-1].strip()) + len(results)
                 self.defect_count_label.setText(f"缺陷数量: {defect_count}")
+            elif result_status == 'ERROR':
+                self.status_label.setText("ERROR")
+                self.status_label.setStyleSheet("""
+                    QLabel {
+                        color: #FF8800;
+                        background-color: #2a2a1a;
+                        border: 3px solid #FF8800;
+                        border-radius: 10px;
+                        padding: 15px 40px;
+                        min-width: 120px;
+                    }
+                """)
             else:
                 self.status_label.setText("OK")
                 self.status_label.setStyleSheet("""

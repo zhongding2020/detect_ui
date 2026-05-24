@@ -16,29 +16,35 @@ def check_dependencies():
     print("检查依赖...")
     print("=" * 70)
     
-    try:
-        import PyInstaller
-        print("✓ PyInstaller: 已安装")
-    except ImportError:
-        print("✗ PyInstaller: 未安装")
-        print("  正在安装...")
-        try:
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'pyinstaller'])
-            print("  ✓ PyInstaller 安装成功")
-        except:
-            print("  ✗ 安装失败，请手动运行: pip install pyinstaller")
-            return False
+    dependencies = [
+        ('PyInstaller', 'pyinstaller>=5.10.0'),
+        ('PyQt5', 'pyqt5>=5.15.0'),
+        ('cv2', 'opencv-python>=4.5.0'),
+        ('watchdog', 'watchdog>=3.0.0'),
+        ('sklearn', 'scikit-learn>=1.3.0'),
+        ('pandas', 'pandas>=3.0.3'),
+        ('PIL', 'Pillow>=10.0.0'),
+    ]
     
-    try:
-        import PyQt5
-        print("✓ PyQt5: 已安装")
-    except ImportError:
-        print("✗ PyQt5: 未安装")
-        print("  请运行: pip install pyqt5")
-        return False
+    all_installed = True
+    
+    for import_name, package_name in dependencies:
+        try:
+            __import__(import_name)
+            print(f"✓ {package_name.split('>=')[0]}: 已安装")
+        except ImportError:
+            print(f"✗ {package_name.split('>=')[0]}: 未安装")
+            print(f"  正在安装...")
+            try:
+                subprocess.check_call([sys.executable, '-m', 'pip', 'install', package_name])
+                print(f"  ✓ {package_name.split('>=')[0]} 安装成功")
+            except Exception as e:
+                print(f"  ✗ 安装失败，请手动运行: pip install {package_name}")
+                print(f"    错误: {e}")
+                all_installed = False
     
     print()
-    return True
+    return all_installed
 
 
 def compile_all_plugins():

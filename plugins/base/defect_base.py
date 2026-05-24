@@ -50,7 +50,7 @@ class DetectionAlgorithmBase(ABC):
         self.description = "Base defect detector"
     
     @abstractmethod
-    def detect(self, image_path: str) -> List[DetectionResult]:
+    def detect(self, image_path: str) -> Dict[str, Any]:
         """
         检测图片中的缺陷
         
@@ -58,7 +58,12 @@ class DetectionAlgorithmBase(ABC):
             image_path: 待检测图片的路径
             
         Returns:
-            List[DetectionResult]: 检测结果列表
+            Dict: 检测结果字典，包含以下字段:
+                - image_path: 原始图片路径
+                - result_status: 检测状态 (OK/NG/ERROR)
+                - result_image: 检测结果图片数据
+                - result_path: 结果保存路径
+                - error_message: 错误信息（如有）
         """
         pass
     
