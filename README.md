@@ -181,9 +181,6 @@ class MyDetector(DetectionAlgorithmBase):
 
 MIT License
 
-## 📞 联系方式
-
-如有问题或建议，请联系开发团队。
 
 ---
 
