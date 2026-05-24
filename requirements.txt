@@ -1,0 +1,4 @@
+PyQt5>=5.15.0
+opencv-python>=4.5.0
+pyinstaller>=5.10.0
+watchdog>=3.0.0
