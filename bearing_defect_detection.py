@@ -20,7 +20,7 @@ import threading
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QPushButton, QLabel, QSlider, 
                              QTableWidget, QTableWidgetItem, QSplitter, 
-                             QGroupBox, QFrame, QGridLayout,
+                             QGroupBox, QFrame, QGridLayout, QScrollArea,
                              QFileDialog, QMessageBox, QComboBox, QDialog)
 from PyQt5.QtCore import Qt, QTimer, QObject, pyqtSignal
 from PyQt5.QtGui import QFont
@@ -82,6 +82,53 @@ try:
 except ImportError:
     HAS_WATCHDOG = False
     NewFileHandler = None
+
+
+class DraggableScrollArea(QScrollArea):
+    """支持鼠标拖拽滚动的滚动区域"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMouseTracking(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._dragging = False
+        self._last_pos = None
+        self._cursor_changed = False
+    
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._dragging = True
+            self._last_pos = event.pos()
+            self.setCursor(Qt.ClosedHandCursor)
+            self._cursor_changed = True
+        super().mousePressEvent(event)
+    
+    def mouseMoveEvent(self, event):
+        if self._dragging and self._last_pos:
+            delta = event.pos() - self._last_pos
+            self._last_pos = event.pos()
+            
+            # 移动滚动条
+            h_bar = self.horizontalScrollBar()
+            v_bar = self.verticalScrollBar()
+            h_bar.setValue(h_bar.value() - delta.x())
+            v_bar.setValue(v_bar.value() - delta.y())
+        super().mouseMoveEvent(event)
+    
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._dragging = False
+            self._last_pos = None
+            self.setCursor(Qt.ArrowCursor)
+            self._cursor_changed = False
+        super().mouseReleaseEvent(event)
+    
+    def leaveEvent(self, event):
+        if self._cursor_changed:
+            self.setCursor(Qt.ArrowCursor)
+            self._cursor_changed = False
+        super().leaveEvent(event)
 
 
 class Worker(QObject):
@@ -246,6 +293,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("超声缺陷检测系统")
         self.setGeometry(100, 100, 1400, 900)
         
+        # 设置窗口图标
+        self.set_window_icon()
+        
         # 设置窗口可以最大化
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint)
         
@@ -278,6 +328,10 @@ class MainWindow(QMainWindow):
         # watchdog相关
         self.file_observer = None
         self.file_event_handler = None
+        
+        # 检测控制相关
+        self.is_detecting = False
+        self.detect_stop_event = threading.Event()
         
         # 信号处理
         self.worker = Worker()
@@ -425,11 +479,23 @@ class MainWindow(QMainWindow):
         self.folder_btn.clicked.connect(self.select_folder)
         layout.addWidget(self.folder_btn)
         
+        # 检测按钮区域
+        detect_btn_layout = QHBoxLayout()
+        
         # 立即检测按钮
         self.start_btn = QPushButton("⚡ 立即检测")
         self.start_btn.setStyleSheet("background-color: #4a6a4a; font-weight: bold;")
         self.start_btn.clicked.connect(self.start_detection)
-        layout.addWidget(self.start_btn)
+        detect_btn_layout.addWidget(self.start_btn)
+        
+        # 停止检测按钮
+        self.stop_btn = QPushButton("⏹️ 停止检测")
+        self.stop_btn.setStyleSheet("background-color: #6a4a4a; font-weight: bold;")
+        self.stop_btn.clicked.connect(self.stop_detection)
+        self.stop_btn.setEnabled(False)
+        detect_btn_layout.addWidget(self.stop_btn)
+        
+        layout.addLayout(detect_btn_layout)
         
         # 文件夹监听区域
         monitor_separator = QLabel("━━━━━━━━━━━━━━")
@@ -571,22 +637,65 @@ class MainWindow(QMainWindow):
         
         layout.addLayout(status_bar)
         
-        # 图片显示区域
-        self.image_label = QLabel()
-        self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setMinimumSize(640, 480)
-        self.image_label.setStyleSheet("""
-            QLabel {
+        # 图片显示区域 - 使用可拖拽的滚动区域
+        self.scroll_area = DraggableScrollArea()
+        self.scroll_area.setWidgetResizable(False)
+        self.scroll_area.setStyleSheet("""
+            QScrollArea {
                 background-color: #0a0a15;
                 border: 2px solid #333;
                 border-radius: 5px;
+            }
+        """)
+        
+        self.image_label = QLabel()
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setMinimumSize(640, 480)
+        self.image_label.setFixedSize(640, 480)
+        self.image_label.setStyleSheet("""
+            QLabel {
+                background-color: #0a0a15;
                 color: #666666;
-                padding: 20px;
             }
         """)
         self.image_label.setText("请选择图片并开始检测\n结果将显示在这里")
+        self.image_label.setScaledContents(False)
         
-        layout.addWidget(self.image_label, stretch=1)
+        self.scroll_area.setWidget(self.image_label)
+        
+        # 放大控制按钮
+        zoom_layout = QHBoxLayout()
+        self.zoom_in_btn = QPushButton("🔍 放大")
+        self.zoom_in_btn.setStyleSheet("background-color: #4a4a6a; font-weight: bold;")
+        self.zoom_in_btn.clicked.connect(self.zoom_in)
+        zoom_layout.addWidget(self.zoom_in_btn)
+        
+        self.zoom_out_btn = QPushButton("🔍 缩小")
+        self.zoom_out_btn.setStyleSheet("background-color: #4a4a6a; font-weight: bold;")
+        self.zoom_out_btn.clicked.connect(self.zoom_out)
+        zoom_layout.addWidget(self.zoom_out_btn)
+        
+        self.reset_zoom_btn = QPushButton("🔍 重置")
+        self.reset_zoom_btn.setStyleSheet("background-color: #4a4a6a; font-weight: bold;")
+        self.reset_zoom_btn.clicked.connect(self.reset_zoom)
+        zoom_layout.addWidget(self.reset_zoom_btn)
+        
+        zoom_layout.addStretch()
+        
+        # 缩放比例显示
+        self.zoom_label = QLabel("缩放: 100%")
+        self.zoom_label.setStyleSheet("color: #ffffff;")
+        zoom_layout.addWidget(self.zoom_label)
+        
+        layout.addLayout(status_bar)
+        layout.addWidget(self.scroll_area, stretch=1)
+        layout.addLayout(zoom_layout)
+        
+        # 缩放相关变量
+        self.current_zoom = 1.0
+        self.min_zoom = 0.1
+        self.max_zoom = 4.0
+        self.zoom_step = 0.1
         
         return area
     
@@ -694,13 +803,6 @@ class MainWindow(QMainWindow):
     
     def start_detection(self):
         """开始检测"""
-        import time
-        import os
-        
-        print("\n" + "=" * 70)
-        print("🚀 超声缺陷检测系统 - 开始检测")
-        print("=" * 70)
-        
         # 检查是否有图片
         if not self.selected_images:
             QMessageBox.warning(self, "警告", "请先选择要检测的图片！")
@@ -713,9 +815,27 @@ class MainWindow(QMainWindow):
             print("❌ 错误：未选择检测插件")
             return
         
-        # 禁用开始按钮，防止重复点击
+        # 设置检测状态
+        self.is_detecting = True
+        self.detect_stop_event.clear()
+        
+        # 更新按钮状态
         self.start_btn.setEnabled(False)
         self.start_btn.setText("⏳ 检测中...")
+        self.stop_btn.setEnabled(True)
+        
+        # 在独立线程中执行检测
+        detect_thread = threading.Thread(target=self._run_detection, daemon=True)
+        detect_thread.start()
+    
+    def _run_detection(self):
+        """执行检测的实际逻辑（在独立线程中运行）"""
+        import time
+        import os
+        
+        print("\n" + "=" * 70)
+        print("🚀 超声缺陷检测系统 - 开始检测")
+        print("=" * 70)
         
         # 打印插件信息
         plugin_info = self.current_plugin.get_info()
@@ -762,6 +882,11 @@ class MainWindow(QMainWindow):
             print("-" * 70)
             
             for idx, image_path in enumerate(self.selected_images, 1):
+                # 检查是否需要停止
+                if self.detect_stop_event.is_set():
+                    print(f"\n⏹️ 检测已停止")
+                    break
+                
                 print(f"\n📸 [{idx}/{len(self.selected_images)}] 处理图片: {image_path}")
                 
                 # 更新文件名标签
@@ -890,10 +1015,73 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "错误", f"检测过程中出现错误：\n{str(e)}")
         
         finally:
-            # 重新启用开始按钮
+            # 重置检测状态
+            self.is_detecting = False
+            self.detect_stop_event.clear()
+            
+            # 重新启用按钮
             self.start_btn.setEnabled(True)
-            self.start_btn.setText("⚡ 立即开始")
+            self.start_btn.setText("⚡ 立即检测")
+            self.stop_btn.setEnabled(False)
             print(f"🔄 界面已恢复就绪状态")
+    
+    def stop_detection(self):
+        """停止正在进行的检测"""
+        if self.is_detecting:
+            print("\n⏹️ 正在停止检测...")
+            self.detect_stop_event.set()
+            self.status_label.setText("停止中")
+            self.status_label.setStyleSheet("""
+                QLabel {
+                    color: #FF8800;
+                    background-color: #2a2a1a;
+                    border: 3px solid #FF8800;
+                    border-radius: 10px;
+                    padding: 15px 40px;
+                    min-width: 120px;
+                }
+            """)
+        else:
+            print("⚠️ 没有正在进行的检测")
+    
+    def zoom_in(self):
+        """放大图片"""
+        if self.current_zoom < self.max_zoom:
+            self.current_zoom += self.zoom_step
+            self.update_zoom_display()
+    
+    def zoom_out(self):
+        """缩小图片"""
+        if self.current_zoom > self.min_zoom:
+            self.current_zoom -= self.zoom_step
+            self.update_zoom_display()
+    
+    def reset_zoom(self):
+        """重置缩放比例"""
+        self.current_zoom = 1.0
+        self.update_zoom_display()
+    
+    def update_zoom_display(self):
+        """更新缩放显示"""
+        zoom_percent = int(self.current_zoom * 100)
+        self.zoom_label.setText(f"缩放: {zoom_percent}%")
+        
+        # 更新图片显示
+        if hasattr(self, '_current_pixmap') and self._current_pixmap is not None:
+            # 将浮点数转换为整数
+            new_width = int(self._current_pixmap.width() * self.current_zoom)
+            new_height = int(self._current_pixmap.height() * self.current_zoom)
+            
+            scaled_pixmap = self._current_pixmap.scaled(
+                new_width,
+                new_height,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            
+            # 更新图片标签大小以支持拖拽滚动
+            self.image_label.setFixedSize(new_width, new_height)
+            self.image_label.setPixmap(scaled_pixmap)
     
     def display_image_with_results(self, image_path, results, result_image=None, save_result=True):
         """在界面上显示带标注的图片
@@ -978,9 +1166,31 @@ class MainWindow(QMainWindow):
             bytes_per_line = 3 * width
             q_image = QImage(img_rgb.data, width, height, bytes_per_line, QImage.Format_RGB888)
             
+            # 创建原始 pixmap 并保存
+            self._current_pixmap = QPixmap.fromImage(q_image)
+            self._original_width = width
+            self._original_height = height
+            
+            # 应用当前缩放比例（转换为整数）
+            scaled_pixmap = self._current_pixmap.scaled(
+                int(width * self.current_zoom),
+                int(height * self.current_zoom),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            
+            # 设置图片标签大小为缩放后的大小，以支持拖拽滚动
+            self.image_label.setFixedSize(
+                int(width * self.current_zoom),
+                int(height * self.current_zoom)
+            )
+            
             # 设置图片
-            self.image_label.setPixmap(QPixmap.fromImage(q_image))
+            self.image_label.setPixmap(scaled_pixmap)
             self.image_label.setAlignment(Qt.AlignCenter)
+            
+            # 更新缩放显示
+            self.update_zoom_display()
             
         except ImportError:
             print(f"   ⚠️ OpenCV未安装，无法显示标注图片")
@@ -999,6 +1209,67 @@ class MainWindow(QMainWindow):
         
         # 更新检测目标标签
         self.target_label.setText(f"🎯 检测目标: {total_detections}个")
+    
+    def set_window_icon(self):
+        """设置窗口图标"""
+        try:
+            from PyQt5.QtGui import QIcon
+            import sys
+            
+            # 图标文件路径（支持开发模式和打包模式）
+            if getattr(sys, 'frozen', False):
+                # 打包后的情况：可执行文件所在目录
+                app_dir = os.path.dirname(sys.executable)
+            else:
+                # 开发模式：脚本所在目录
+                app_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            icon_path = os.path.join(app_dir, 'icon.ico')
+            
+            if os.path.exists(icon_path):
+                self.setWindowIcon(QIcon(icon_path))
+            else:
+                # 创建一个简单的默认图标
+                self.create_default_icon()
+                
+        except Exception as e:
+            print(f"[Icon] Error setting window icon: {e}")
+    
+    def create_default_icon(self):
+        """创建一个简单的默认图标"""
+        try:
+            from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor
+            from PyQt5.QtCore import Qt
+            
+            # 创建一个 64x64 的图标
+            pixmap = QPixmap(64, 64)
+            pixmap.fill(QColor(74, 106, 74))  # 绿色背景
+            
+            # 创建画家
+            painter = QPainter(pixmap)
+            painter.setPen(QColor(255, 255, 255))
+            painter.setBrush(QColor(255, 255, 255))
+            
+            # 绘制一个简单的检测图标（十字瞄准器样式）
+            # 绘制十字线
+            painter.drawLine(32, 10, 32, 54)
+            painter.drawLine(10, 32, 54, 32)
+            
+            # 绘制中心圆点
+            painter.drawEllipse(28, 28, 8, 8)
+            
+            # 绘制四个角
+            painter.drawLine(16, 16, 24, 24)
+            painter.drawLine(40, 16, 48, 24)
+            painter.drawLine(16, 48, 24, 40)
+            painter.drawLine(48, 48, 40, 40)
+            
+            painter.end()
+            
+            self.setWindowIcon(QIcon(pixmap))
+            
+        except Exception as e:
+            print(f"[Icon] Error creating default icon: {e}")
     
     def on_plugin_changed(self, index):
         """插件选择改变时的回调"""
