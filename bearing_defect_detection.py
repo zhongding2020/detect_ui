@@ -134,6 +134,7 @@ class DraggableScrollArea(QScrollArea):
 class Worker(QObject):
     """信号处理类，用于在主线程执行UI操作"""
     file_detected = pyqtSignal(str)
+    error_occurred = pyqtSignal(str, str)  # (image_path, error_message)
     
     def __init__(self):
         super().__init__()
@@ -336,6 +337,7 @@ class MainWindow(QMainWindow):
         # 信号处理
         self.worker = Worker()
         self.worker.file_detected.connect(self._process_new_file)
+        self.worker.error_occurred.connect(self._handle_detection_error)
         
         self.setStyleSheet("""
             QMainWindow {
@@ -913,11 +915,8 @@ class MainWindow(QMainWindow):
                     import traceback
                     traceback.print_exc()
                     
-                    # 弹出错误对话框
-                    QMessageBox.critical(self, "检测错误", f"检测过程中发生错误：\n\n{error_msg}\n\n请检查插件配置或尝试其他检测算法。")
-                    
-                    # 将错误记录添加到历史
-                    self.add_to_history(image_path, [], 0, None, status='ERROR', error_message=error_msg)
+                    # 通过信号在主线程中处理错误，避免在后台线程中操作UI
+                    self.worker.error_occurred.emit(image_path, error_msg)
                     
                     continue
                 
@@ -1547,6 +1546,36 @@ class MainWindow(QMainWindow):
             print(f"[Process] Error in _process_new_file: {e}")
             import traceback
             traceback.print_exc()
+    
+    def _handle_detection_error(self, image_path, error_message):
+        """处理检测错误（在主线程中调用）"""
+        # 将错误记录添加到历史
+        self.add_to_history(image_path, [], 0, None, status='ERROR', error_message=error_message)
+        
+        # 更新状态为错误
+        self.status_label.setText("ERROR")
+        self.status_label.setStyleSheet("""
+            QLabel {
+                color: #FF8800;
+                background-color: #2a2a1a;
+                border: 3px solid #FF8800;
+                border-radius: 10px;
+                padding: 15px 40px;
+                min-width: 120px;
+            }
+        """)
+        
+        # 刷新图片显示区域为错误状态
+        self.image_label.setText(f"检测错误:\n{error_message}")
+        self.image_label.setStyleSheet("""
+            QLabel {
+                background-color: #2a2a1a;
+                color: #FF8800;
+                font-size: 14px;
+            }
+        """)
+        
+        print(f"[Error] Handled detection error for: {image_path}")
     
     def add_to_history(self, image_path, results, elapsed_time, result_image_path=None, status=None, error_message=None):
         """

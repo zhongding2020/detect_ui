@@ -101,6 +101,7 @@ class MockDetector(DetectionAlgorithmBase):
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
             
             result_status = 'NG' if len(detections) > 0 else 'OK'
+            raise ValueError("Mock detector error")
             
             return {
                 'image_path': image_path,
