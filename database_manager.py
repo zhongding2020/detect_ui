@@ -79,6 +79,7 @@ class DatabaseManager:
                 status TEXT NOT NULL,
                 elapsed_time REAL DEFAULT 0.0,
                 result_image_path TEXT,
+                error_message TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -103,7 +104,8 @@ class DatabaseManager:
     
     def save_record(self, timestamp: str, image_path: str, filename: str, 
                   defect_count: int, status: str, elapsed_time: float,
-                  result_image_path: str, results: List[DetectionResult]) -> int:
+                  result_image_path: str, results: List[DetectionResult],
+                  error_message: str = None) -> int:
         """
         保存检测记录到数据库
         
@@ -112,10 +114,11 @@ class DatabaseManager:
             image_path: 原始图片路径
             filename: 文件名
             defect_count: 缺陷数量
-            status: 状态 OK/NG
+            status: 状态 OK/NG/ERROR
             elapsed_time: 检测耗时
             result_image_path: 标注图片路径
             results: 检测结果列表
+            error_message: 错误信息（可选）
             
         Returns:
             int: 插入的记录 ID
@@ -126,9 +129,9 @@ class DatabaseManager:
         # 插入主记录
         cursor.execute('''
             INSERT INTO detection_records 
-            (timestamp, image_path, filename, defect_count, status, elapsed_time, result_image_path)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (timestamp, image_path, filename, defect_count, status, elapsed_time, result_image_path))
+            (timestamp, image_path, filename, defect_count, status, elapsed_time, result_image_path, error_message)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (timestamp, image_path, filename, defect_count, status, elapsed_time, result_image_path, error_message))
         
         record_id = cursor.lastrowid
         

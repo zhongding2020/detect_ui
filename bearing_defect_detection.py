@@ -156,31 +156,28 @@ class HistoryDialog(QDialog):
         # 设置样式
         self.setStyleSheet("""
             QDialog {
-                background-color: #2b2b2b;
+                background-color: #f5f5f5;
             }
             QTableWidget {
-                background-color: #3a3a3a;
-                color: #ffffff;
-                gridline-color: #555;
-                border: 1px solid #444;
+                background-color: #ffffff;
+                gridline-color: #ddd;
+                border: 1px solid #ccc;
                 border-radius: 5px;
             }
             QTableWidget::item {
                 padding: 8px;
-                border-bottom: 1px solid #444;
-            }
-            QTableWidget::item:selected {
-                background-color: #5a5a5a;
+                border-bottom: 1px solid #eee;
+                color: #333;
             }
             QHeaderView::section {
-                background-color: #4a4a4a;
-                color: #ffffff;
+                background-color: #e8e8e8;
+                color: #333;
                 padding: 10px;
-                border: 1px solid #555;
+                border: 1px solid #ddd;
                 font-weight: bold;
             }
             QPushButton {
-                background-color: #4a6a4a;
+                background-color: #4a8c4a;
                 color: #ffffff;
                 border: none;
                 padding: 10px 20px;
@@ -268,8 +265,11 @@ class HistoryDialog(QDialog):
             if record['status'] == 'NG':
                 status_item.setBackground(Qt.red)
                 status_item.setForeground(Qt.white)
-            else:
+            elif record['status'] == 'OK':
                 status_item.setBackground(Qt.green)
+                status_item.setForeground(Qt.black)
+            else:
+                status_item.setBackground(Qt.orange)
                 status_item.setForeground(Qt.black)
                 
             self.table.setItem(row, 4, status_item)
@@ -908,9 +908,17 @@ class MainWindow(QMainWindow):
                     error_message = detect_result.get('error_message', '')
                     print(f"   ✅ 插件调用成功，返回 {len(results)} 个检测结果，状态: {result_status}")
                 except Exception as e:
-                    print(f"   ❌ 插件调用失败: {str(e)}")
+                    error_msg = f"插件调用失败: {str(e)}"
+                    print(f"   ❌ {error_msg}")
                     import traceback
                     traceback.print_exc()
+                    
+                    # 弹出错误对话框
+                    QMessageBox.critical(self, "检测错误", f"检测过程中发生错误：\n\n{error_msg}\n\n请检查插件配置或尝试其他检测算法。")
+                    
+                    # 将错误记录添加到历史
+                    self.add_to_history(image_path, [], 0, None, status='ERROR', error_message=error_msg)
+                    
                     continue
                 
                 # 显示图片（带标注）并保存
@@ -1460,10 +1468,20 @@ class MainWindow(QMainWindow):
                 result_image = detect_result.get('result_image', None)
                 print(f"[Process] Detected {len(results)} defects in {filename}, status: {result_status}")
             except Exception as e:
-                print(f"[Process] Plugin error: {e}")
+                error_msg = f"插件调用失败: {str(e)}"
+                print(f"[Process] ❌ {error_msg}")
+                import traceback
+                traceback.print_exc()
+                
+                # 弹出错误对话框
+                QMessageBox.critical(self, "检测错误", f"检测过程中发生错误：\n\n{error_msg}\n\n请检查插件配置或尝试其他检测算法。")
+                
                 results = []
                 result_status = 'ERROR'
                 result_image = None
+                
+                # 将错误记录添加到历史
+                self.add_to_history(image_path, [], 0, None, status='ERROR', error_message=error_msg)
             
             # 显示图片和结果
             result_image_path = self.display_image_with_results(image_path, results, result_image, save_result=True)
@@ -1518,7 +1536,7 @@ class MainWindow(QMainWindow):
             import traceback
             traceback.print_exc()
     
-    def add_to_history(self, image_path, results, elapsed_time, result_image_path=None):
+    def add_to_history(self, image_path, results, elapsed_time, result_image_path=None, status=None, error_message=None):
         """
         添加检测记录到历史
         
@@ -1527,10 +1545,18 @@ class MainWindow(QMainWindow):
             results: 检测结果列表
             elapsed_time: 检测耗时
             result_image_path: 标注图片路径
+            status: 状态（可选，自动推断时为 None）
+            error_message: 错误信息（可选）
         """
         from datetime import datetime
         
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 确定状态
+        if status is not None:
+            record_status = status
+        else:
+            record_status = 'NG' if len(results) > 0 else 'OK'
         
         # 创建历史记录
         history_record = {
@@ -1540,9 +1566,10 @@ class MainWindow(QMainWindow):
             'filename': os.path.basename(image_path),
             'results': results,
             'defect_count': len(results),
-            'status': 'NG' if len(results) > 0 else 'OK',
+            'status': record_status,
             'elapsed_time': elapsed_time,
-            'result_image_path': result_image_path
+            'result_image_path': result_image_path,
+            'error_message': error_message if error_message else ''
         }
         
         # 添加到历史列表
@@ -1556,10 +1583,11 @@ class MainWindow(QMainWindow):
                     image_path=image_path,
                     filename=os.path.basename(image_path),
                     defect_count=len(results),
-                    status='NG' if len(results) > 0 else 'OK',
+                    status=record_status,
                     elapsed_time=elapsed_time,
                     result_image_path=result_image_path,
-                    results=results
+                    results=results,
+                    error_message=error_message
                 )
                 # 更新历史记录的 ID 为数据库分配的 ID
                 history_record['id'] = record_id
