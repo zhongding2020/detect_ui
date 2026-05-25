@@ -1,50 +1,9 @@
 import sys
 import os
-import logging
-from logging.handlers import RotatingFileHandler
 
-# 设置日志配置
-def setup_logging():
-    # 创建日志目录
-    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
-    os.makedirs(log_dir, exist_ok=True)
-    
-    log_file = os.path.join(log_dir, 'app.log')
-    
-    # 创建日志记录器
-    logger = logging.getLogger('detection_system')
-    logger.setLevel(logging.DEBUG)
-    
-    # 创建滚动文件处理器（最多保留5个日志文件，每个最大10MB）
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=10 * 1024 * 1024,  # 10MB
-        backupCount=5,
-        encoding='utf-8'
-    )
-    file_handler.setLevel(logging.DEBUG)
-    
-    # 创建控制台处理器
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    
-    # 创建日志格式
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    
-    file_handler.setFormatter(formatter)
-    console_handler.setFormatter(formatter)
-    
-    # 添加处理器
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    
-    return logger
+from utils.logging_utils import get_logger
 
-# 初始化日志
-logger = setup_logging()
+logger = get_logger('detection')
 
 # 设置 Qt 环境变量（修复 Linux 平台插件问题）
 if sys.platform.startswith('linux'):

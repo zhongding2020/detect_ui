@@ -9,9 +9,11 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 import sys
 
-# 导入 DetectionResult 类（从插件基类导入
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from plugins.base.defect_base import DetectionResult
+from utils.logging_utils import get_logger
+
+logger = get_logger('database')
 
 
 def get_app_data_directory() -> str:
@@ -147,7 +149,7 @@ class DatabaseManager:
         conn.commit()
         conn.close()
         
-        print(f"[Database] Saved record ID: {record_id}")
+        logger.info(f"Saved record ID: {record_id}")
         return record_id
     
     def load_records(self) -> List[Dict[str, Any]]:
@@ -197,7 +199,7 @@ class DatabaseManager:
         
         conn.close()
         
-        print(f"[Database] Loaded {len(records)} records from database")
+        logger.info(f"Loaded {len(records)} records from database")
         return records
     
     def clear_all_records(self):
@@ -212,7 +214,7 @@ class DatabaseManager:
         conn.commit()
         conn.close()
         
-        print(f"[Database] All records cleared")
+        logger.info(f"All records cleared")
     
     def delete_record(self, record_id: int):
         """删除指定记录"""
@@ -225,7 +227,7 @@ class DatabaseManager:
         conn.commit()
         conn.close()
         
-        print(f"[Database] Deleted record ID: {record_id}")
+        logger.info(f"Deleted record ID: {record_id}")
     
     @staticmethod
     def save_result_image(image_path: str, annotated_image) -> Optional[str]:
@@ -257,9 +259,9 @@ class DatabaseManager:
             
             # 保存图片
             cv2.imwrite(save_path, annotated_image)
-            print(f"[Database] Saved result image to: {save_path}")
+            logger.info(f"Saved result image to: {save_path}")
             return save_path
             
         except Exception as e:
-            print(f"[Database] Error saving result image: {e}")
+            logger.error(f"Error saving result image: {e}")
             return None
