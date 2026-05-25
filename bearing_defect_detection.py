@@ -1,5 +1,50 @@
 import sys
 import os
+import logging
+from logging.handlers import RotatingFileHandler
+
+# 设置日志配置
+def setup_logging():
+    # 创建日志目录
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    
+    log_file = os.path.join(log_dir, 'app.log')
+    
+    # 创建日志记录器
+    logger = logging.getLogger('detection_system')
+    logger.setLevel(logging.DEBUG)
+    
+    # 创建滚动文件处理器（最多保留5个日志文件，每个最大10MB）
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10 * 1024 * 1024,  # 10MB
+        backupCount=5,
+        encoding='utf-8'
+    )
+    file_handler.setLevel(logging.DEBUG)
+    
+    # 创建控制台处理器
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    
+    # 创建日志格式
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+    
+    # 添加处理器
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    
+    return logger
+
+# 初始化日志
+logger = setup_logging()
 
 # 设置 Qt 环境变量（修复 Linux 平台插件问题）
 if sys.platform.startswith('linux'):
@@ -317,7 +362,7 @@ class MainWindow(QMainWindow):
             # 从数据库加载历史记录
             self.detection_history = self.db_manager.load_records()
         except Exception as e:
-            print(f"[Database] Error initializing database: {e}")
+            logger.error(f"[Database] Error initializing database: {e}")
             self.db_manager = None
         
         # 文件夹监听相关
@@ -1342,14 +1387,14 @@ class MainWindow(QMainWindow):
         self.file_observer.schedule(self.file_event_handler, self.monitored_folder, recursive=True)
         self.file_observer.start()
         
-        print("[Watchdog] File system observer started")
+        logger.info("[Watchdog] File system observer started")
     
     def _start_polling_monitoring(self):
         """使用定期扫描作为降级方案"""
         self.monitor_thread = threading.Thread(target=self._monitor_folder_thread, daemon=True)
         self.monitor_thread.start()
         
-        print("[Polling] Polling monitor started")
+        logger.info("[Polling] Polling monitor started")
     
     def _on_new_file_detected(self, filepath):
         """当检测到新文件时的回调"""
@@ -1446,14 +1491,14 @@ class MainWindow(QMainWindow):
     def _process_new_file(self, image_path):
         """处理新检测到的文件（在主线程中调用）"""
         try:
-            print(f"[Process] Entering _process_new_file for: {image_path}")
+            logger.debug(f"[Process] Entering _process_new_file for: {image_path}")
             
             if not self.current_plugin:
-                print(f"[Process] ERROR: No plugin selected!")
+                logger.error(f"[Process] ERROR: No plugin selected!")
                 return
             
-            print(f"[Process] Using plugin: {self.current_plugin}")
-            print(f"[Process] Processing new file: {image_path}")
+            logger.info(f"[Process] Using plugin: {self.current_plugin}")
+            logger.info(f"[Process] Processing new file: {image_path}")
             
             # 显示文件名
             filename = os.path.basename(image_path)
@@ -1465,10 +1510,10 @@ class MainWindow(QMainWindow):
                 results = detect_result.get('detections', [])
                 result_status = detect_result.get('result_status', 'OK')
                 result_image = detect_result.get('result_image', None)
-                print(f"[Process] Detected {len(results)} defects in {filename}, status: {result_status}")
+                logger.info(f"[Process] Detected {len(results)} defects in {filename}, status: {result_status}")
             except Exception as e:
                 error_msg = f"插件调用失败: {str(e)}"
-                print(f"[Process] ❌ {error_msg}")
+                logger.error(f"[Process] ❌ {error_msg}")
                 import traceback
                 traceback.print_exc()
                 
@@ -1633,14 +1678,14 @@ class MainWindow(QMainWindow):
                 # 更新历史记录的 ID 为数据库分配的 ID
                 history_record['id'] = record_id
             except Exception as e:
-                print(f"[Database] Error saving record: {e}")
+                logger.error(f"[Database] Error saving record: {e}")
         
         print(f"[History] Added detection record: {history_record['filename']} - {history_record['status']}")
     
     def clear_history(self):
         """清空历史记录"""
         if not self.detection_history:
-            print("[History] No history to clear")
+            logger.info("[History] No history to clear")
             return
             
         self.detection_history.clear()
@@ -1649,13 +1694,13 @@ class MainWindow(QMainWindow):
             try:
                 self.db_manager.clear_all_records()
             except Exception as e:
-                print(f"[Database] Error clearing records: {e}")
-        print("[History] History cleared")
+                logger.error(f"[Database] Error clearing records: {e}")
+        logger.info("[History] History cleared")
     
     def show_history_dialog(self):
         """显示历史记录对话框"""
         if not self.detection_history:
-            print("[History] No history records")
+            logger.info("[History] No history records")
             return
         
         # 创建并显示对话框
