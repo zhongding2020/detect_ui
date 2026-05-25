@@ -1476,12 +1476,24 @@ class MainWindow(QMainWindow):
                 # 弹出错误对话框
                 QMessageBox.critical(self, "检测错误", f"检测过程中发生错误：\n\n{error_msg}\n\n请检查插件配置或尝试其他检测算法。")
                 
-                results = []
-                result_status = 'ERROR'
-                result_image = None
-                
                 # 将错误记录添加到历史
                 self.add_to_history(image_path, [], 0, None, status='ERROR', error_message=error_msg)
+                
+                # 更新状态为错误
+                self.status_label.setText("ERROR")
+                self.status_label.setStyleSheet("""
+                    QLabel {
+                        color: #FF8800;
+                        background-color: #2a2a1a;
+                        border: 3px solid #FF8800;
+                        border-radius: 10px;
+                        padding: 15px 40px;
+                        min-width: 120px;
+                    }
+                """)
+                
+                print(f"[Process] Finished processing {filename}")
+                return
             
             # 显示图片和结果
             result_image_path = self.display_image_with_results(image_path, results, result_image, save_result=True)
