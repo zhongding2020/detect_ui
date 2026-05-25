@@ -7,7 +7,7 @@ a = Analysis(
     binaries=[],
     datas=[('plugins', 'plugins')],
     hiddenimports=['PyQt5', 'PyQt5.QtCore', 'PyQt5.QtGui', 'PyQt5.QtWidgets', 'cv2',
-                   'pandas', 'sklearn', 'PIL'],
+               'pandas', 'sklearn', 'PIL', 'PIL.Image', 'PIL.ImageDraw', 'PIL.ImageOps'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
