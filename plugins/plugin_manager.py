@@ -9,7 +9,12 @@ import importlib
 import py_compile
 from pathlib import Path
 from typing import List, Dict, Optional
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from plugins.base.defect_base import DetectionAlgorithmBase, DetectionResult
+from utils.logging_utils import get_logger
+
+logger = get_logger('plugin')
 
 
 class PluginManager:
@@ -67,7 +72,7 @@ class PluginManager:
         plugin_path = self.get_plugin_directory()
         
         if not os.path.exists(plugin_path):
-            print(f"Warning: Plugin directory not found: {plugin_path}")
+            logger.warning(f"Plugin directory not found: {plugin_path}")
             return plugin_files
         
         # 遍历插件目录
@@ -99,7 +104,7 @@ class PluginManager:
             py_compile.compile(plugin_path, doraise=True)
             return True
         except py_compile.PyCompileError as e:
-            print(f"Error compiling plugin {plugin_path}: {e}")
+            logger.error(f"Error compiling plugin {plugin_path}: {e}")
             return False
     
     def load_plugin(self, plugin_path: str) -> Optional[DetectionAlgorithmBase]:
@@ -146,13 +151,13 @@ class PluginManager:
                     self.plugin_info[plugin_name] = plugin_instance.get_info()
                     self.loaded_plugins.append(plugin_name)
                     
-                    print(f"Loaded plugin: {plugin_name} v{plugin_instance.version}")
+                    logger.info(f"Loaded plugin: {plugin_name} v{plugin_instance.version}")
                     return plugin_instance
             
             return None
             
         except Exception as e:
-            print(f"Error loading plugin {plugin_path}: {e}")
+            logger.error(f"Error loading plugin {plugin_path}: {e}")
             import traceback
             traceback.print_exc()
             return None
