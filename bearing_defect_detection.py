@@ -1,7 +1,7 @@
 import sys
 import os
 
-from utils.logging_utils import get_logger
+from src.utils.logging_utils import get_logger
 
 logger = get_logger('detection')
 
@@ -27,12 +27,12 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QGroupBox, QFrame, QGridLayout, QScrollArea,
                              QFileDialog, QMessageBox, QComboBox, QDialog)
 from PyQt5.QtCore import Qt, QTimer, QObject, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QColor
 
 # 导入插件系统
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from plugins.plugin_manager import PluginManager
-from database_manager import DatabaseManager
+from src.utils.database_manager import DatabaseManager
 
 # 尝试导入watchdog，如果没有则降级使用定期扫描
 try:
@@ -268,14 +268,14 @@ class HistoryDialog(QDialog):
             status_item.setTextAlignment(Qt.AlignCenter)
             
             if record['status'] == 'NG':
-                status_item.setBackground(Qt.red)
-                status_item.setForeground(Qt.white)
+                status_item.setBackground(QColor(255, 0, 0))  # 红色
+                status_item.setForeground(QColor(255, 255, 255))  # 白色
             elif record['status'] == 'OK':
-                status_item.setBackground(Qt.green)
-                status_item.setForeground(Qt.black)
+                status_item.setBackground(QColor(0, 200, 0))  # 绿色
+                status_item.setForeground(QColor(0, 0, 0))  # 黑色
             else:
-                status_item.setBackground(Qt.orange)
-                status_item.setForeground(Qt.black)
+                status_item.setBackground(QColor(255, 165, 0))  # 橙色
+                status_item.setForeground(QColor(0, 0, 0))  # 黑色
                 
             self.table.setItem(row, 4, status_item)
     
@@ -1094,7 +1094,7 @@ class MainWindow(QMainWindow):
             self.image_label.setFixedSize(new_width, new_height)
             self.image_label.setPixmap(scaled_pixmap)
     
-    def display_image_with_results(self, image_path, results, result_image=None, save_result=True):
+    def display_image_with_results(self, image_path, results, result_image=None, save_result=True, error_message=None):
         """在界面上显示带标注的图片
         
         Args:
@@ -1102,6 +1102,7 @@ class MainWindow(QMainWindow):
             results: 检测结果列表
             result_image: 插件返回的已标注图片（可选）
             save_result: 是否保存标注后的图片
+            error_message: 错误信息（可选），如果有则在图片上叠加显示
             
         Returns:
             str: 保存的图片路径，未保存时返回None
@@ -1116,8 +1117,15 @@ class MainWindow(QMainWindow):
             if result_image is not None:
                 img = result_image.copy()
             else:
-                # 读取图片
-                img = cv2.imread(image_path)
+                # 读取图片（处理中文路径）
+                import numpy as np
+                try:
+                    img_array = np.fromfile(image_path, dtype=np.uint8)
+                    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                except Exception as read_error:
+                    print(f"   ⚠️ 无法读取图片: {image_path}, 错误: {read_error}")
+                    return None
+                
                 if img is None:
                     print(f"   ⚠️ 无法读取图片: {image_path}")
                     return None
@@ -1152,6 +1160,35 @@ class MainWindow(QMainWindow):
                     cv2.circle(img, (x1, y1), 10, color, -1)
                     cv2.putText(img, str(idx + 1), (x1 - 5, y1 + 5),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+            
+            # 如果有错误信息，在图片左上角叠加显示
+            if error_message:
+                # 计算文本大小
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                text_lines = error_message.split('\n')
+                max_width = 0
+                for line in text_lines:
+                    (text_w, text_h), baseline = cv2.getTextSize(line, font, 0.7, 2)
+                    max_width = max(max_width, text_w)
+                
+                # 绘制背景矩形
+                padding = 10
+                box_height = len(text_lines) * (text_h + 5) + padding * 2
+                box_width = max_width + padding * 2
+                
+                # 半透明黑色背景
+                overlay = img.copy()
+                cv2.rectangle(overlay, (0, 0), (box_width, box_height), (40, 40, 20), -1)
+                cv2.addWeighted(overlay, 0.7, img, 0.3, 0, img)
+                
+                # 绘制边框
+                cv2.rectangle(img, (0, 0), (box_width, box_height), (255, 136, 0), 2)
+                
+                # 绘制错误文本
+                y_offset = padding + text_h + 5
+                for line in text_lines:
+                    cv2.putText(img, line, (padding, y_offset), font, 0.7, (255, 136, 0), 2)
+                    y_offset += text_h + 5
             
             # 保存标注图片（如果需要）
             if save_result and hasattr(self, 'db_manager'):
@@ -1569,17 +1606,8 @@ class MainWindow(QMainWindow):
             }
         """)
         
-        # 刷新图片显示区域为错误状态
-        self.image_label.setText(f"检测错误:\n{error_message}")
-        self.image_label.setStyleSheet("""
-            QLabel {
-                background-color: #2a2a1a;
-                color: #FF8800;
-                font-size: 14px;
-            }
-        """)
-        
-        print(f"[Error] Handled detection error for: {image_path}")
+        # 显示原图
+        self.display_image_with_results(image_path, [], error_message=error_message)
     
     def add_to_history(self, image_path, results, elapsed_time, result_image_path=None, status=None, error_message=None):
         """

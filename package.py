@@ -209,7 +209,7 @@ def main():
         return
     
     # 检查是否在项目根目录
-    if not os.path.exists('bearing_defect_detection.py'):
+    if not os.path.exists('main.py'):
         print("错误: 请在项目根目录运行此脚本")
         print(f"当前目录: {os.getcwd()}")
         sys.exit(1)

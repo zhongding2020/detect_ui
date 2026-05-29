@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['bearing_defect_detection.py'],
+    ['main.py'],
     pathex=[],
     binaries=[],
     datas=[('plugins', 'plugins')],

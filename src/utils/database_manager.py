@@ -9,9 +9,11 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# 添加项目根目录到路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 from plugins.base.defect_base import DetectionResult
-from utils.logging_utils import get_logger
+from src.utils.logging_utils import get_logger
 
 logger = get_logger('database')
 
@@ -30,8 +32,8 @@ def get_app_data_directory() -> str:
         # 打包后的情况：使用可执行文件所在目录
         app_dir = os.path.dirname(sys.executable)
     else:
-        # 开发模式：使用脚本所在目录
-        app_dir = os.path.dirname(os.path.abspath(__file__))
+        # 开发模式：使用项目根目录
+        app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     
     # 创建并返回 data 目录
     data_dir = os.path.join(app_dir, 'data')
@@ -85,6 +87,19 @@ class DatabaseManager:
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        
+        # 更新现有表结构（添加缺失的列）
+        try:
+            cursor.execute("ALTER TABLE detection_records ADD COLUMN error_message TEXT")
+        except sqlite3.OperationalError:
+            # 列已存在，忽略错误
+            pass
+        
+        try:
+            cursor.execute("ALTER TABLE detection_records ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP")
+        except sqlite3.OperationalError:
+            # 列已存在，忽略错误
+            pass
         
         # 创建检测结果表
         cursor.execute('''
