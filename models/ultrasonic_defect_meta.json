@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-08-16T19:16:52.398315",
+  "created_at": "2026-08-16T19:41:27.273683",
   "feature_names": [
     "a_mean",
     "a_std",
@@ -17,6 +17,28 @@
     "dark_spot_large_count",
     "dark_spot_max_area",
     "dark_spot_total_area",
+    "edge_bright_large",
+    "edge_bright_max_area",
+    "edge_bright_mean_area",
+    "edge_bright_spots",
+    "edge_bright_total",
+    "edge_contrast_high_ratio",
+    "edge_contrast_max",
+    "edge_contrast_mean",
+    "edge_contrast_p95",
+    "edge_contrast_std",
+    "edge_defect_color_ratio",
+    "edge_inner_gray_diff",
+    "edge_inner_v_diff",
+    "edge_inner_v_ratio",
+    "edge_mean_gray",
+    "edge_mean_s",
+    "edge_mean_v",
+    "edge_red_ratio",
+    "edge_std_gray",
+    "edge_std_v",
+    "edge_white_ratio",
+    "edge_yellow_ratio",
     "g_mean",
     "g_std",
     "grad_mean",
@@ -49,72 +71,72 @@
     "very_low_ratio"
   ],
   "model_type": "rf",
-  "test_accuracy": 0.7926136363636364,
-  "cv_accuracy_mean": 0.7690139067666136,
-  "cv_accuracy_std": 0.014351256911338248,
+  "test_accuracy": 0.8011363636363636,
+  "cv_accuracy_mean": 0.7874965296181318,
+  "cv_accuracy_std": 0.014526210741461739,
   "num_samples": 1759,
   "num_ng": 459,
   "num_ok": 1300,
   "top_features": [
     {
+      "name": "edge_std_v",
+      "importance": 0.039849669819658165
+    },
+    {
       "name": "lap_mean",
-      "importance": 0.05729607420045203
-    },
-    {
-      "name": "lap_std",
-      "importance": 0.04662768209558283
-    },
-    {
-      "name": "bright_spot_count",
-      "importance": 0.04610469306040312
+      "importance": 0.0387992967522056
     },
     {
       "name": "v_mean",
-      "importance": 0.03849982716968509
-    },
-    {
-      "name": "v_std",
-      "importance": 0.03718072929325395
-    },
-    {
-      "name": "very_high_ratio",
-      "importance": 0.03468191546366496
+      "importance": 0.03659271959165745
     },
     {
       "name": "a_std",
-      "importance": 0.03409076438499869
+      "importance": 0.03295451352900234
+    },
+    {
+      "name": "lap_std",
+      "importance": 0.028386567692235635
+    },
+    {
+      "name": "bright_spot_count",
+      "importance": 0.02443132218436977
+    },
+    {
+      "name": "edge_yellow_ratio",
+      "importance": 0.022760379809036616
+    },
+    {
+      "name": "edge_white_ratio",
+      "importance": 0.022281534775098664
+    },
+    {
+      "name": "v_std",
+      "importance": 0.021970292367747026
+    },
+    {
+      "name": "edge_std_gray",
+      "importance": 0.021640525719437434
+    },
+    {
+      "name": "edge_contrast_high_ratio",
+      "importance": 0.021322918747305502
     },
     {
       "name": "b_std",
-      "importance": 0.033780337354338975
+      "importance": 0.020252126019188754
     },
     {
-      "name": "b_mean",
-      "importance": 0.0318736333469788
+      "name": "very_high_ratio",
+      "importance": 0.019955200100324956
     },
     {
-      "name": "r_mean",
-      "importance": 0.026584770732240286
+      "name": "edge_bright_spots",
+      "importance": 0.019613130328487435
     },
     {
-      "name": "r_std",
-      "importance": 0.026184492191207328
-    },
-    {
-      "name": "bright_spot_mean_area",
-      "importance": 0.0250150767847229
-    },
-    {
-      "name": "b2_std",
-      "importance": 0.024432488538203
-    },
-    {
-      "name": "very_low_ratio",
-      "importance": 0.024296944519373836
-    },
-    {
-      "name": "g_std",
-      "importance": 0.02420569351159037
+      "name": "edge_contrast_std",
+      "importance": 0.018952226037432664
     }
   ]
 }

@@ -41,18 +41,24 @@ def extract_roi_and_response(image):
     """
     提取工件 ROI 和归一化响应图。
     输入：BGR 超声 C-scan 图（可能带右侧色标）
-    输出：roi_mask, response_map, roi_bbox
+    输出：img_cropped, roi_mask, response_map, roi_bbox, edge_mask
     """
     if image is None:
-        return None, None, None
+        return None, None, None, None, None
 
-    # 去色标：TIFF 右侧有色标条，宽度约占 5-10%，根据长宽比判断
+    # 去色标：仅 TIFF 右侧有色标条
     h, w = image.shape[:2]
     img = image.copy()
+    # 仅对 TIFF 格式或明显带色标的图进行裁剪
+    # 判断方法：右侧 5% 区域的平均亮度与整体差异大
     if w > h * 2.5 and w > 1100:
-        # 右侧 100px 可能是色标，先裁剪看看
-        crop_width = max(w - 120, int(w * 0.92))
-        img = img[:, :crop_width]
+        right_strip = img[:, int(w * 0.95):, :]
+        strip_mean = right_strip.mean()
+        body_mean = img[:, :int(w * 0.95), :].mean()
+        # 如果右侧条带亮度明显不同于主体，判定为色标
+        if abs(strip_mean - body_mean) > 30:
+            crop_width = int(w * 0.92)
+            img = img[:, :crop_width]
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
@@ -71,7 +77,8 @@ def extract_roi_and_response(image):
         roi_mask = np.ones_like(gray, dtype=np.uint8) * 255
         roi_bbox = (0, 0, gray.shape[1], gray.shape[0])
         response_map = gray.astype(np.float32) / 255.0
-        return roi_mask, response_map, roi_bbox
+        edge_mask = roi_mask.copy()
+        return img, roi_mask, response_map, roi_bbox, edge_mask
 
     # 选面积最大的轮廓
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
@@ -90,7 +97,14 @@ def extract_roi_and_response(image):
     # 响应图：归一化到 [0, 1]，超声回波振幅越高越亮
     response_map = gray.astype(np.float32) / 255.0
 
-    return roi_mask, response_map, roi_bbox
+    # 边缘焊接区域 = 膨胀 - 腐蚀
+    edge_width = 20
+    kernel_edge = cv2.getStructuringElement(cv2.MORPH_RECT, (edge_width, edge_width))
+    dilated = cv2.dilate(roi_mask, kernel_edge)
+    eroded = cv2.erode(roi_mask, kernel_edge)
+    edge_mask = cv2.subtract(dilated, eroded)
+
+    return img, roi_mask, response_map, roi_bbox, edge_mask
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +119,7 @@ def extract_features(image_path):
     if img is None:
         return None
 
-    roi_mask, response_map, roi_bbox = extract_roi_and_response(img)
+    img, roi_mask, response_map, roi_bbox, edge_mask = extract_roi_and_response(img)
     if roi_mask is None or response_map is None:
         return None
 
@@ -199,6 +213,69 @@ def extract_features(image_path):
     features['image_width'] = float(img.shape[1])
     features['image_height'] = float(img.shape[0])
     features['roi_area_ratio'] = float(np.sum(roi_mask > 0) / (img.shape[0] * img.shape[1]))
+
+    # 9. 边缘焊接区域特征 (核心区域)
+    if edge_mask is not None and np.sum(edge_mask > 0) > 0:
+        edge_pixels_gray = gray_full[edge_mask > 0].astype(np.float32)
+        edge_pixels_v = hsv[:, :, 2][edge_mask > 0].astype(np.float32)
+        edge_pixels_s = hsv[:, :, 1][edge_mask > 0].astype(np.float32)
+        inner_mask = cv2.subtract(roi_mask, edge_mask)
+        inner_pixels_v = hsv[:, :, 2][inner_mask > 0].astype(np.float32) if np.sum(inner_mask > 0) > 0 else np.array([128.0])
+        inner_pixels_gray = gray_full[inner_mask > 0].astype(np.float32) if np.sum(inner_mask > 0) > 0 else np.array([128.0])
+
+        # 边缘基本统计
+        features['edge_mean_v'] = float(edge_pixels_v.mean())
+        features['edge_std_v'] = float(edge_pixels_v.std())
+        features['edge_mean_gray'] = float(edge_pixels_gray.mean())
+        features['edge_std_gray'] = float(edge_pixels_gray.std())
+        features['edge_mean_s'] = float(edge_pixels_s.mean())
+
+        # 边缘-内部对比
+        features['edge_inner_v_diff'] = float(edge_pixels_v.mean() - inner_pixels_v.mean())
+        features['edge_inner_gray_diff'] = float(edge_pixels_gray.mean() - inner_pixels_gray.mean())
+        features['edge_inner_v_ratio'] = float(edge_pixels_v.mean() / max(inner_pixels_v.mean(), 1))
+
+        # 边缘缺陷颜色 (红/白/亮黄 = 空洞)
+        red_mask = ((hsv[:, :, 0] < 15) | (hsv[:, :, 0] > 165)) & (hsv[:, :, 1] > 100) & (hsv[:, :, 2] > 150) & (edge_mask > 0)
+        yellow_mask = (hsv[:, :, 0] >= 15) & (hsv[:, :, 0] <= 40) & (hsv[:, :, 1] > 80) & (hsv[:, :, 2] > 180) & (edge_mask > 0)
+        white_mask = (hsv[:, :, 1] < 50) & (hsv[:, :, 2] > 200) & (edge_mask > 0)
+        defect_color_mask = red_mask | yellow_mask | white_mask
+
+        features['edge_defect_color_ratio'] = float(defect_color_mask.sum() / max(np.sum(edge_mask > 0), 1))
+        features['edge_red_ratio'] = float(red_mask.sum() / max(np.sum(edge_mask > 0), 1))
+        features['edge_yellow_ratio'] = float(yellow_mask.sum() / max(np.sum(edge_mask > 0), 1))
+        features['edge_white_ratio'] = float(white_mask.sum() / max(np.sum(edge_mask > 0), 1))
+
+        # 边缘区域高亮连通域 (潜在空洞)
+        bright_edge = ((hsv[:, :, 2] > 180) & (edge_mask > 0)).astype(np.uint8) * 255
+        num_e, _, stats_e, _ = cv2.connectedComponentsWithStats(bright_edge, connectivity=8)
+        edge_areas = stats_e[1:, cv2.CC_STAT_AREA]
+        features['edge_bright_spots'] = float(len(edge_areas))
+        features['edge_bright_max_area'] = float(edge_areas.max()) if len(edge_areas) > 0 else 0
+        features['edge_bright_total'] = float(edge_areas.sum()) if len(edge_areas) > 0 else 0
+        features['edge_bright_large'] = float(np.sum(edge_areas > 50)) if len(edge_areas) > 0 else 0
+        features['edge_bright_mean_area'] = float(edge_areas.mean()) if len(edge_areas) > 0 else 0
+
+        # 边缘局部对比度 (消除光照/位置差异)
+        v_f = hsv[:, :, 2].astype(np.float32)
+        local_bg = cv2.medianBlur(v_f.astype(np.uint8), 31).astype(np.float32)
+        local_contrast = v_f - local_bg
+        edge_contrast = local_contrast[edge_mask > 0]
+        features['edge_contrast_mean'] = float(edge_contrast.mean())
+        features['edge_contrast_std'] = float(edge_contrast.std())
+        features['edge_contrast_max'] = float(edge_contrast.max())
+        features['edge_contrast_p95'] = float(np.percentile(edge_contrast, 95))
+        features['edge_contrast_high_ratio'] = float(np.mean(edge_contrast > 50))
+    else:
+        # 无边缘区域时填充默认值
+        for k in ['edge_mean_v', 'edge_std_v', 'edge_mean_gray', 'edge_std_gray', 'edge_mean_s',
+                   'edge_inner_v_diff', 'edge_inner_gray_diff', 'edge_inner_v_ratio',
+                   'edge_defect_color_ratio', 'edge_red_ratio', 'edge_yellow_ratio', 'edge_white_ratio',
+                   'edge_bright_spots', 'edge_bright_max_area', 'edge_bright_total',
+                   'edge_bright_large', 'edge_bright_mean_area',
+                   'edge_contrast_mean', 'edge_contrast_std', 'edge_contrast_max',
+                   'edge_contrast_p95', 'edge_contrast_high_ratio']:
+            features[k] = 0.0
 
     return features
 
