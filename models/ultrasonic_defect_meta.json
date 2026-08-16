@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-08-16T19:41:27.273683",
+  "created_at": "2026-08-16T21:02:32.075322",
   "feature_names": [
     "a_mean",
     "a_std",
@@ -71,72 +71,72 @@
     "very_low_ratio"
   ],
   "model_type": "rf",
-  "test_accuracy": 0.8011363636363636,
-  "cv_accuracy_mean": 0.7874965296181318,
-  "cv_accuracy_std": 0.014526210741461739,
+  "test_accuracy": 0.7982954545454546,
+  "cv_accuracy_mean": 0.7931854319678958,
+  "cv_accuracy_std": 0.02782222425706052,
   "num_samples": 1759,
   "num_ng": 459,
   "num_ok": 1300,
   "top_features": [
     {
       "name": "edge_std_v",
-      "importance": 0.039849669819658165
-    },
-    {
-      "name": "lap_mean",
-      "importance": 0.0387992967522056
-    },
-    {
-      "name": "v_mean",
-      "importance": 0.03659271959165745
-    },
-    {
-      "name": "a_std",
-      "importance": 0.03295451352900234
-    },
-    {
-      "name": "lap_std",
-      "importance": 0.028386567692235635
+      "importance": 0.04818005814414878
     },
     {
       "name": "bright_spot_count",
-      "importance": 0.02443132218436977
+      "importance": 0.03007400771558817
     },
     {
-      "name": "edge_yellow_ratio",
-      "importance": 0.022760379809036616
+      "name": "h_std",
+      "importance": 0.027689048077641307
     },
     {
-      "name": "edge_white_ratio",
-      "importance": 0.022281534775098664
+      "name": "edge_mean_s",
+      "importance": 0.026667492749864418
+    },
+    {
+      "name": "lap_std",
+      "importance": 0.026572244428115076
     },
     {
       "name": "v_std",
-      "importance": 0.021970292367747026
+      "importance": 0.025891304088486534
     },
     {
-      "name": "edge_std_gray",
-      "importance": 0.021640525719437434
+      "name": "l_std",
+      "importance": 0.025006640110874372
+    },
+    {
+      "name": "edge_yellow_ratio",
+      "importance": 0.023326734954838786
+    },
+    {
+      "name": "g_std",
+      "importance": 0.02318670158725133
     },
     {
       "name": "edge_contrast_high_ratio",
-      "importance": 0.021322918747305502
+      "importance": 0.023052439229154377
     },
     {
-      "name": "b_std",
-      "importance": 0.020252126019188754
+      "name": "edge_std_gray",
+      "importance": 0.022716430825915044
+    },
+    {
+      "name": "edge_white_ratio",
+      "importance": 0.022505895425364228
     },
     {
       "name": "very_high_ratio",
-      "importance": 0.019955200100324956
-    },
-    {
-      "name": "edge_bright_spots",
-      "importance": 0.019613130328487435
+      "importance": 0.022187707833179995
     },
     {
       "name": "edge_contrast_std",
-      "importance": 0.018952226037432664
+      "importance": 0.02116239266230763
+    },
+    {
+      "name": "bright_spot_total_area",
+      "importance": 0.02083270126910524
     }
   ]
 }

@@ -151,27 +151,33 @@ def extract_features(image_path):
     features['very_high_ratio'] = float(np.mean(roi_pixels > 0.9))
     features['very_low_ratio'] = float(np.mean(roi_pixels < 0.05))
 
-    # 4. BGR/HSV/Lab 全局均值与标准差
+    # 4. BGR/HSV/Lab ROI 内统计（v3.1: 位置不变）
+    roi_mask_bool = roi_mask > 0
     for i, prefix in enumerate(['b', 'g', 'r']):
-        features[f'{prefix}_mean'] = float(img[:, :, i].mean())
-        features[f'{prefix}_std'] = float(img[:, :, i].std())
+        ch = img[:, :, i][roi_mask_bool]
+        features[f'{prefix}_mean'] = float(ch.mean()) if len(ch) > 0 else 0.0
+        features[f'{prefix}_std'] = float(ch.std()) if len(ch) > 0 else 0.0
     for i, prefix in enumerate(['h', 's', 'v']):
-        features[f'{prefix}_mean'] = float(hsv[:, :, i].mean())
-        features[f'{prefix}_std'] = float(hsv[:, :, i].std())
+        ch = hsv[:, :, i][roi_mask_bool]
+        features[f'{prefix}_mean'] = float(ch.mean()) if len(ch) > 0 else 0.0
+        features[f'{prefix}_std'] = float(ch.std()) if len(ch) > 0 else 0.0
     for i, prefix in enumerate(['l', 'a', 'b2']):
-        features[f'{prefix}_mean'] = float(lab[:, :, i].mean())
-        features[f'{prefix}_std'] = float(lab[:, :, i].std())
+        ch = lab[:, :, i][roi_mask_bool]
+        features[f'{prefix}_mean'] = float(ch.mean()) if len(ch) > 0 else 0.0
+        features[f'{prefix}_std'] = float(ch.std()) if len(ch) > 0 else 0.0
 
-    # 5. 纹理/梯度
+    # 5. 纹理/梯度（ROI 内）
     gx = cv2.Scharr(gray_full, cv2.CV_64F, 1, 0)
     gy = cv2.Scharr(gray_full, cv2.CV_64F, 0, 1)
     grad_mag = np.sqrt(gx ** 2 + gy ** 2)
-    features['grad_mean'] = float(grad_mag.mean())
-    features['grad_std'] = float(grad_mag.std())
+    grad_roi = grad_mag[roi_mask_bool]
+    features['grad_mean'] = float(grad_roi.mean()) if len(grad_roi) > 0 else 0.0
+    features['grad_std'] = float(grad_roi.std()) if len(grad_roi) > 0 else 0.0
 
     lap = cv2.Laplacian(gray_full, cv2.CV_64F)
-    features['lap_mean'] = float(np.abs(lap).mean())
-    features['lap_std'] = float(lap.std())
+    lap_roi = lap[roi_mask_bool]
+    features['lap_mean'] = float(np.abs(lap_roi).mean()) if len(lap_roi) > 0 else 0.0
+    features['lap_std'] = float(lap_roi.std()) if len(lap_roi) > 0 else 0.0
 
     # 6. 连通域分析（高响应斑点）
     bright_binary = (response_map > 0.75).astype(np.uint8) * 255

@@ -1,5 +1,10 @@
 /dist
+/dist2
 /build
+/build2
+/dist - 副本/
+*.exe
+*.spec.bak
 /**/__pycache__/
 /.workbuddy/
 /data/

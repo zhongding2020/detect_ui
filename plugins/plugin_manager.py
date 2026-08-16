@@ -162,7 +162,7 @@ class PluginManager:
         except Exception as e:
             logger.error(f"Error loading plugin {plugin_path}: {e}")
             import traceback
-            traceback.print_exc()
+            logger.error(traceback.format_exc())
             return None
 
     def load_all_plugins(self) -> Dict[str, DetectionAlgorithmBase]:
