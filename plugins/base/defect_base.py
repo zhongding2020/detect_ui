@@ -127,3 +127,11 @@ class DetectionAlgorithmBase(ABC):
             处理后的检测结果
         """
         return results
+
+    def set_confidence(self, threshold: float):
+        """设置置信度阈值（子类可重写）"""
+        pass
+
+    def set_iou(self, threshold: float):
+        """设置IoU阈值（子类可重写）"""
+        pass

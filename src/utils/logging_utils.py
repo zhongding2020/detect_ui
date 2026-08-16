@@ -4,13 +4,22 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 def get_app_data_directory() -> str:
-    """获取应用数据目录"""
+    """
+    获取应用数据目录
+
+    在打包成 exe 后，需要确保数据存储在持久化的位置，而不是临时目录。
+    返回的目录优先级：
+    1. 打包后：可执行文件所在目录的 data 文件夹
+    2. 开发模式：项目根目录的 data 文件夹
+    """
     if getattr(sys, 'frozen', False):
         app_dir = os.path.dirname(sys.executable)
     else:
         app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    
-    return app_dir
+
+    data_dir = os.path.join(app_dir, 'data')
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
 
 def setup_logging():
     """初始化日志系统"""

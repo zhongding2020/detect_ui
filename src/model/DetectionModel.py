@@ -64,8 +64,8 @@ class DetectionModel:
             result_image_path = None
             if 'result_image' in result and result['result_image'] is not None:
                 result_image_path = self.db_manager.save_result_image(
-                    result['result_image'], 
-                    os.path.basename(image_path)
+                    image_path,
+                    result['result_image']
                 )
             
             # 获取检测结果信息

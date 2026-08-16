@@ -17,6 +17,13 @@ class DetectionPresenter(QObject):
     
     signal_detection_error = pyqtSignal(str, str)  # image_path, error_message
     
+    # 线程安全的 UI 更新信号（子线程通过这些信号通知主线程更新 UI）
+    signal_update_log = pyqtSignal(str)
+    signal_update_result = pyqtSignal(dict)
+    signal_display_image = pyqtSignal(object)  # numpy array
+    signal_set_detecting_state = pyqtSignal(bool)
+    signal_set_monitoring_state = pyqtSignal(bool)
+    
     def __init__(self, view: DetectionView, model: DetectionModel):
         super().__init__()
         self.view = view
@@ -49,7 +56,18 @@ class DetectionPresenter(QObject):
         self.view.signal_stop_monitoring.connect(self.stop_monitoring)
         self.view.signal_view_history.connect(self.view_history)
         
+        # 置信度/IoU 滑块信号
+        self.view.signal_confidence_changed.connect(self._on_confidence_changed)
+        self.view.signal_iou_changed.connect(self._on_iou_changed)
+        
         self.signal_detection_error.connect(self._handle_detection_error)
+        
+        # 连接线程安全的 UI 更新信号到 View 方法
+        self.signal_update_log.connect(self.view.update_log)
+        self.signal_update_result.connect(self.view.update_result)
+        self.signal_display_image.connect(self.view.display_image)
+        self.signal_set_detecting_state.connect(self.view.set_detecting_state)
+        self.signal_set_monitoring_state.connect(self.view.set_monitoring_state)
     
     def _init_plugins(self):
         """初始化插件"""
@@ -68,6 +86,18 @@ class DetectionPresenter(QObject):
             self.view.update_log(f"✓ 已选择检测算法: {plugin_name}")
         else:
             logger.error(f"Plugin not found: {plugin_name}")
+    
+    def _on_confidence_changed(self, value):
+        """置信度滑块变化时更新当前插件的置信度阈值"""
+        if self.model.current_plugin:
+            self.model.current_plugin.set_confidence(value)
+            logger.info(f"Confidence threshold set to: {value:.2f}")
+    
+    def _on_iou_changed(self, value):
+        """IoU滑块变化时更新当前插件的IoU阈值"""
+        if self.model.current_plugin:
+            self.model.current_plugin.set_iou(value)
+            logger.info(f"IoU threshold set to: {value:.2f}")
     
     def select_image(self):
         """选择图片进行检测（支持多选）"""
@@ -180,7 +210,7 @@ class DetectionPresenter(QObject):
                     break
                 
                 # 更新进度
-                self.view.update_log(f"🔍 [{idx}/{len(image_files)}] 检测中: {os.path.basename(image_path)}")
+                self.signal_update_log.emit(f"🔍 [{idx}/{len(image_files)}] 检测中: {os.path.basename(image_path)}")
                 
                 # 执行检测
                 self._process_image(image_path)
@@ -195,7 +225,7 @@ class DetectionPresenter(QObject):
         finally:
             # 更新状态
             self.is_detecting = False
-            self.view.set_detecting_state(False)
+            self.signal_set_detecting_state.emit(False)
     
     def start_monitoring(self):
         """开始监听目录"""
@@ -256,7 +286,7 @@ class DetectionPresenter(QObject):
     def _process_image(self, image_path):
         """处理单张图片"""
         logger.info(f"Processing image: {image_path}")
-        self.view.update_log(f"🔍 检测中: {os.path.basename(image_path)}")
+        self.signal_update_log.emit(f"🔍 检测中: {os.path.basename(image_path)}")
         
         try:
             # 执行检测
@@ -296,20 +326,20 @@ class DetectionPresenter(QObject):
                 logger.error(f"Failed to save record for: {image_path}")
             
             # 更新界面
-            self.view.update_result(result)
+            self.signal_update_result.emit(result)
             
             # 显示图片
             if 'result_image' in result and result['result_image'] is not None:
-                self.view.display_image(result['result_image'])
+                self.signal_display_image.emit(result['result_image'])
             else:
                 # 读取原图并绘制检测框
                 image = self.model.read_image(image_path)
                 if image is not None:
                     detections = result.get('detections', [])
                     image_with_boxes = self.model.draw_detections(image, detections)
-                    self.view.display_image(image_with_boxes)
+                    self.signal_display_image.emit(image_with_boxes)
             
-            self.view.update_log(f"✓ 检测完成: {status}")
+            self.signal_update_log.emit(f"✓ 检测完成: {status}")
             logger.info(f"Detection completed: {status}")
             
         except Exception as e:

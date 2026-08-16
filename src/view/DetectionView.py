@@ -166,6 +166,8 @@ class DetectionView(QMainWindow):
     signal_start_monitoring = pyqtSignal()
     signal_stop_monitoring = pyqtSignal()
     signal_view_history = pyqtSignal()
+    signal_confidence_changed = pyqtSignal(float)
+    signal_iou_changed = pyqtSignal(float)
     
     def __init__(self):
         super().__init__()
@@ -468,11 +470,15 @@ class DetectionView(QMainWindow):
     
     def on_conf_changed(self, value):
         """置信度滑块变化"""
-        self.conf_label.setText(f"置信度 (Conf): {value / 100:.2f}")
+        conf = value / 100.0
+        self.conf_label.setText(f"置信度 (Conf): {conf:.2f}")
+        self.signal_confidence_changed.emit(conf)
     
     def on_iou_changed(self, value):
         """IoU滑块变化"""
-        self.iou_label.setText(f"交并比 (IoU): {value / 100:.2f}")
+        iou = value / 100.0
+        self.iou_label.setText(f"交并比 (IoU): {iou:.2f}")
+        self.signal_iou_changed.emit(iou)
     
     def create_display_area(self):
         """创建图片显示区域"""
