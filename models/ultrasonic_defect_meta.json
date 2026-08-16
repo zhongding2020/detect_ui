@@ -1,0 +1,120 @@
+{
+  "created_at": "2026-08-16T19:16:52.398315",
+  "feature_names": [
+    "a_mean",
+    "a_std",
+    "b2_mean",
+    "b2_std",
+    "b_mean",
+    "b_std",
+    "bright_spot_area_std",
+    "bright_spot_count",
+    "bright_spot_large_count",
+    "bright_spot_max_area",
+    "bright_spot_mean_area",
+    "bright_spot_total_area",
+    "dark_spot_count",
+    "dark_spot_large_count",
+    "dark_spot_max_area",
+    "dark_spot_total_area",
+    "g_mean",
+    "g_std",
+    "grad_mean",
+    "grad_std",
+    "h_mean",
+    "h_std",
+    "high_ratio",
+    "image_height",
+    "image_width",
+    "l_mean",
+    "l_std",
+    "lap_mean",
+    "lap_std",
+    "low_ratio",
+    "mean",
+    "median",
+    "mid_ratio",
+    "p5",
+    "p95",
+    "p99",
+    "r_mean",
+    "r_std",
+    "roi_area_ratio",
+    "s_mean",
+    "s_std",
+    "std",
+    "v_mean",
+    "v_std",
+    "very_high_ratio",
+    "very_low_ratio"
+  ],
+  "model_type": "rf",
+  "test_accuracy": 0.7926136363636364,
+  "cv_accuracy_mean": 0.7690139067666136,
+  "cv_accuracy_std": 0.014351256911338248,
+  "num_samples": 1759,
+  "num_ng": 459,
+  "num_ok": 1300,
+  "top_features": [
+    {
+      "name": "lap_mean",
+      "importance": 0.05729607420045203
+    },
+    {
+      "name": "lap_std",
+      "importance": 0.04662768209558283
+    },
+    {
+      "name": "bright_spot_count",
+      "importance": 0.04610469306040312
+    },
+    {
+      "name": "v_mean",
+      "importance": 0.03849982716968509
+    },
+    {
+      "name": "v_std",
+      "importance": 0.03718072929325395
+    },
+    {
+      "name": "very_high_ratio",
+      "importance": 0.03468191546366496
+    },
+    {
+      "name": "a_std",
+      "importance": 0.03409076438499869
+    },
+    {
+      "name": "b_std",
+      "importance": 0.033780337354338975
+    },
+    {
+      "name": "b_mean",
+      "importance": 0.0318736333469788
+    },
+    {
+      "name": "r_mean",
+      "importance": 0.026584770732240286
+    },
+    {
+      "name": "r_std",
+      "importance": 0.026184492191207328
+    },
+    {
+      "name": "bright_spot_mean_area",
+      "importance": 0.0250150767847229
+    },
+    {
+      "name": "b2_std",
+      "importance": 0.024432488538203
+    },
+    {
+      "name": "very_low_ratio",
+      "importance": 0.024296944519373836
+    },
+    {
+      "name": "g_std",
+      "importance": 0.02420569351159037
+    }
+  ]
+}
