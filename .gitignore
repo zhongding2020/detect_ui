@@ -3,6 +3,7 @@
 /build
 /build2
 /dist - 副本/
+/release/
 *.exe
 *.spec.bak
 /**/__pycache__/
