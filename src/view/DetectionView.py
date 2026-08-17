@@ -1,11 +1,11 @@
 """检测界面视图"""
 import os
 import sys
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QPushButton, QLabel, QSlider, 
-                             QTableWidget, QTableWidgetItem, QSplitter, 
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+                             QHBoxLayout, QPushButton, QLabel, QSlider,
+                             QTableWidget, QTableWidgetItem, QSplitter,
                              QGroupBox, QFrame, QGridLayout, QScrollArea,
-                             QFileDialog, QMessageBox, QComboBox, QDialog)
+                             QFileDialog, QMessageBox, QComboBox)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QFont, QColor, QImage, QPixmap
 
@@ -53,105 +53,99 @@ class DraggableScrollArea(QScrollArea):
         super().mouseReleaseEvent(event)
 
 
-class HistoryDialog(QDialog):
-    """历史记录对话框"""
-    
-    def __init__(self, history_data, parent=None):
+class HistoryPanel(QWidget):
+    """历史记录侧边面板（嵌入主界面右侧，替代弹窗）"""
+
+    # 双击某条记录时发出，携带完整记录字典
+    record_double_clicked = pyqtSignal(dict)
+
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.history_data = history_data
-        self.selected_record = None
+        self.history_data = []
         self.init_ui()
-    
+
     def init_ui(self):
-        self.setWindowTitle("检测历史记录")
-        self.setGeometry(200, 200, 900, 600)
-        
-        layout = QVBoxLayout()
-        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+
+        # 标题栏
+        header = QLabel("📋 检测历史")
+        header.setStyleSheet(
+            "color: #ffffff; font-size: 14px; font-weight: bold;"
+            "background-color: #4a4a6a; padding: 8px;"
+        )
+        header.setAlignment(Qt.AlignCenter)
+        layout.addWidget(header)
+
+        # 操作提示
+        hint = QLabel("双击记录查看检测详情")
+        hint.setStyleSheet("color: #aaaaaa; font-size: 11px; padding: 3px;")
+        hint.setAlignment(Qt.AlignCenter)
+        layout.addWidget(hint)
+
         # 表格
         self.table = QTableWidget()
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["序号", "文件名", "检测时间", "状态", "缺陷数量"])
+        self.table.setHorizontalHeaderLabels(["ID", "文件名", "检测时间", "状态", "缺陷"])
+        self.table.setColumnWidth(0, 36)
+        self.table.setColumnWidth(1, 110)
+        self.table.setColumnWidth(2, 135)
+        self.table.setColumnWidth(3, 45)
         self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.setStyleSheet("""
-            QTableWidget {
-                background-color: #ffffff;
-                border: 1px solid #ddd;
-                color: #333;
-            }
-            QHeaderView::section {
-                background-color: #e8e8e8;
-                color: #333;
-                padding: 8px;
-                font-weight: bold;
-            }
-            QTableWidget::item {
-                border: 1px solid #eee;
-                padding: 8px;
-            }
-        """)
-        layout.addWidget(self.table)
-        
-        # 按钮
-        btn_layout = QHBoxLayout()
-        self.view_btn = QPushButton("查看详情")
-        self.view_btn.clicked.connect(self.view_record)
-        self.close_btn = QPushButton("关闭")
-        self.close_btn.clicked.connect(self.close)
-        
-        btn_layout.addStretch()
-        btn_layout.addWidget(self.view_btn)
-        btn_layout.addWidget(self.close_btn)
-        layout.addLayout(btn_layout)
-        
-        self.setLayout(layout)
-        self.populate_table()
-    
-    def populate_table(self):
-        """填充表格数据"""
+        self.table.verticalHeader().setVisible(False)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SingleSelection)
+        self.table.setWordWrap(False)
+        self.table.cellDoubleClicked.connect(self._on_cell_double_clicked)
+        layout.addWidget(self.table, stretch=1)
+
+    def update_records(self, history_data):
+        """刷新表格数据"""
+        self.history_data = history_data or []
         self.table.setRowCount(len(self.history_data))
-        
+
         for row, record in enumerate(self.history_data):
-            # 序号
-            self.table.setItem(row, 0, QTableWidgetItem(str(row + 1)))
-            
+            # ID
+            record_id = str(record.get('id', row + 1))
+            self.table.setItem(row, 0, QTableWidgetItem(record_id))
+
             # 文件名
-            filename = os.path.basename(record.get('image_path', ''))
+            filename = record.get('filename', '') or os.path.basename(
+                record.get('image_path', '') or '')
             self.table.setItem(row, 1, QTableWidgetItem(filename))
-            
-            # 检测时间
-            detect_time = record.get('detect_time', '')
-            self.table.setItem(row, 2, QTableWidgetItem(detect_time))
-            
-            # 状态
+
+            # 检测时间（ISO 格式转 YY-MM-DD HH:MM）
+            timestamp = str(record.get('timestamp', '') or '')
+            if timestamp:
+                timestamp = timestamp[:16].replace('T', ' ')
+            self.table.setItem(row, 2, QTableWidgetItem(timestamp))
+
+            # 状态（着色）
             status = record.get('status', 'UNKNOWN')
             status_item = QTableWidgetItem(status)
             if status == 'NG':
-                status_item.setBackground(QColor(255, 0, 0))
+                status_item.setBackground(QColor(170, 40, 40))
                 status_item.setForeground(QColor(255, 255, 255))
             elif status == 'OK':
-                status_item.setBackground(QColor(0, 200, 0))
-                status_item.setForeground(QColor(0, 0, 0))
+                status_item.setBackground(QColor(30, 120, 60))
+                status_item.setForeground(QColor(255, 255, 255))
             else:
-                status_item.setBackground(QColor(255, 165, 0))
-                status_item.setForeground(QColor(0, 0, 0))
+                status_item.setBackground(QColor(170, 120, 30))
+                status_item.setForeground(QColor(255, 255, 255))
+            status_item.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(row, 3, status_item)
-            
+
             # 缺陷数量
-            defect_count = record.get('defect_count', 0)
-            self.table.setItem(row, 4, QTableWidgetItem(str(defect_count)))
-    
-    def view_record(self):
-        """查看选中记录的详情"""
-        selected_items = self.table.selectedItems()
-        if not selected_items:
-            QMessageBox.warning(self, "提示", "请先选择一条记录！")
-            return
-        
-        row = selected_items[0].row()
-        if row < len(self.history_data):
-            self.selected_record = self.history_data[row]
-            self.accept()
+            defect_item = QTableWidgetItem(str(record.get('defect_count', 0)))
+            defect_item.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(row, 4, defect_item)
+
+    def _on_cell_double_clicked(self, row, _column):
+        """双击行：发出打开详情信号"""
+        if 0 <= row < len(self.history_data):
+            self.record_double_clicked.emit(self.history_data[row])
 
 
 class DetectionView(QMainWindow):
@@ -166,6 +160,7 @@ class DetectionView(QMainWindow):
     signal_start_monitoring = pyqtSignal()
     signal_stop_monitoring = pyqtSignal()
     signal_view_history = pyqtSignal()
+    signal_open_history_record = pyqtSignal(dict)  # 双击历史记录打开详情
     signal_confidence_changed = pyqtSignal(float)
     signal_iou_changed = pyqtSignal(float)
     
@@ -281,15 +276,24 @@ class DetectionView(QMainWindow):
         
         # 水平布局
         splitter = QSplitter(Qt.Horizontal)
-        
+
         left_panel = self.create_left_panel()
         center_panel = self.create_center_panel()
-        
+
+        # 历史记录面板（右侧，点击"查看历史"时显示）
+        self.history_panel = HistoryPanel()
+        self.history_panel.hide()
+        self.history_panel.record_double_clicked.connect(
+            self.signal_open_history_record.emit)
+
         splitter.addWidget(left_panel)
         splitter.addWidget(center_panel)
+        splitter.addWidget(self.history_panel)
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 5)
-        
+        splitter.setStretchFactor(2, 0)
+        splitter.setCollapsible(2, False)
+
         main_layout.addWidget(splitter)
     
     def set_window_icon(self):
@@ -759,12 +763,20 @@ class DetectionView(QMainWindow):
         else:
             QMessageBox.information(self, title, message)
     
-    def show_history_dialog(self, history_data):
-        """显示历史记录对话框"""
-        dialog = HistoryDialog(history_data, self)
-        if dialog.exec_() == QDialog.Accepted and dialog.selected_record:
-            return dialog.selected_record
-        return None
+    # ------------------------------------------------------------------
+    # 历史记录面板（右侧嵌入，替代弹窗）
+    # ------------------------------------------------------------------
+    def update_history_panel(self, history_data):
+        """刷新右侧历史记录面板数据"""
+        self.history_panel.update_records(history_data)
+
+    def set_history_panel_visible(self, visible):
+        """显示/隐藏右侧历史记录面板"""
+        self.history_panel.setVisible(visible)
+
+    def is_history_panel_visible(self):
+        """历史记录面板是否可见（用显式隐藏标志，不受父窗口显示状态影响）"""
+        return not self.history_panel.isHidden()
     
     def get_directory(self):
         """选择目录对话框"""

@@ -23,6 +23,7 @@ class DetectionPresenter(QObject):
     signal_display_image = pyqtSignal(object)  # numpy array
     signal_set_detecting_state = pyqtSignal(bool)
     signal_set_monitoring_state = pyqtSignal(bool)
+    signal_refresh_history = pyqtSignal()  # 检测完成后刷新右侧历史面板
     
     def __init__(self, view: DetectionView, model: DetectionModel):
         super().__init__()
@@ -55,6 +56,7 @@ class DetectionPresenter(QObject):
         self.view.signal_start_monitoring.connect(self.start_monitoring)
         self.view.signal_stop_monitoring.connect(self.stop_monitoring)
         self.view.signal_view_history.connect(self.view_history)
+        self.view.signal_open_history_record.connect(self.open_history_record)
         
         # 置信度/IoU 滑块信号
         self.view.signal_confidence_changed.connect(self._on_confidence_changed)
@@ -68,6 +70,15 @@ class DetectionPresenter(QObject):
         self.signal_display_image.connect(self.view.display_image)
         self.signal_set_detecting_state.connect(self.view.set_detecting_state)
         self.signal_set_monitoring_state.connect(self.view.set_monitoring_state)
+        self.signal_refresh_history.connect(self._refresh_history_panel)
+
+    def _refresh_history_panel(self):
+        """检测完成后刷新右侧历史面板（仅当面板可见时）"""
+        try:
+            if self.view.is_history_panel_visible():
+                self.view.update_history_panel(self.model.load_history())
+        except Exception as e:
+            logger.error(f"Refresh history panel error: {str(e)}")
     
     def _init_plugins(self):
         """初始化插件"""
@@ -322,6 +333,8 @@ class DetectionPresenter(QObject):
             record_id = self.model.save_result(image_path, result)
             if record_id:
                 logger.info(f"Successfully saved record with ID: {record_id}")
+                # 刷新右侧历史面板（线程安全，经信号转发到主线程）
+                self.signal_refresh_history.emit()
             else:
                 logger.error(f"Failed to save record for: {image_path}")
             
@@ -371,30 +384,66 @@ class DetectionPresenter(QObject):
             self.view.display_image(image_with_error)
     
     def view_history(self):
-        """查看历史记录"""
+        """查看历史记录：在主界面右侧面板显示（不弹窗），再次点击隐藏"""
+        if self.view.is_history_panel_visible():
+            self.view.set_history_panel_visible(False)
+            return
+
         history = self.model.load_history()
         if not history:
             self.view.show_message("提示", "暂无检测记录", 'info')
             return
-        
-        record = self.view.show_history_dialog(history)
-        if record:
-            # 显示选中记录的图片
-            image_path = record.get('result_image_path', record.get('image_path'))
-            if image_path and os.path.exists(image_path):
-                image = self.model.read_image(image_path)
-                if image is not None:
-                    self.view.display_image(image)
-                
-                # 更新结果显示
-                result = {
-                    'result_status': record.get('status', 'UNKNOWN'),
-                    'detections': [],
-                    'error_message': record.get('error_message', '')
-                }
-                self.view.update_result(result)
+
+        self.view.update_history_panel(history)
+        self.view.set_history_panel_visible(True)
+
+    def open_history_record(self, record):
+        """双击历史记录：在主界面打开该记录的检测详情"""
+        if not record:
+            return
+
+        # 优先显示标注后的结果图；缺失时用原图 + 检测框重建
+        image = None
+        result_image_path = record.get('result_image_path')
+        image_path = record.get('image_path')
+
+        if result_image_path and os.path.exists(result_image_path):
+            image = self.model.read_image(result_image_path)
+
+        if image is None and image_path and os.path.exists(image_path):
+            original = self.model.read_image(image_path)
+            if original is not None:
+                results = record.get('results') or []
+                image = self.model.draw_detections(original, results)
+
+        if image is not None:
+            self.view.display_image(image)
+        else:
+            self.view.show_message(
+                "提示",
+                f"图片文件已不存在:\n{image_path or result_image_path or ''}",
+                'warning')
+
+        # 回填检测结果（含缺陷明细数量）
+        result = {
+            'result_status': record.get('status', 'UNKNOWN'),
+            'detections': record.get('results') or [],
+            'error_message': record.get('error_message', '')
+        }
+        self.view.update_result(result)
+
+        # 更新文件名标签
+        filename = record.get('filename') or (
+            os.path.basename(image_path) if image_path else '')
+        self.view.filename_label.setText(filename)
+
+        logger.info(f"Opened history record #{record.get('id')} "
+                    f"({record.get('status')}), defects="
+                    f"{record.get('defect_count', 0)}")
     
     def load_history_on_startup(self):
-        """启动时加载历史记录"""
+        """启动时加载历史记录到右侧面板（面板默认隐藏）"""
         history = self.model.load_history()
         logger.info(f"Loaded {len(history)} history records")
+        if history:
+            self.view.update_history_panel(history)
